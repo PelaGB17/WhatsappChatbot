@@ -56,7 +56,12 @@ class Main():
     # Método seguro para el envío diario
     def safe_send_daily_update(self):
         with self.scheduler_lock:
-            self.send_daily_update()
+            current_time = time.time()  # Obtener el tiempo actual en segundos
+            if not self.last_run_time or current_time - self.last_run_time > 86400:  # 86400 segundos = 24 horas
+                self.send_daily_update()
+                self.last_run_time = current_time  # Actualizar el tiempo de la última ejecución
+            else:
+                print("La actualización diaria ya se ha enviado hoy. No se ejecuta nuevamente.")
 
     # Función para enviar la actualización diaria de clima y eventos
     def send_daily_update(self):

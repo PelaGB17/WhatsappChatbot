@@ -23,7 +23,7 @@ class Weather():
         return None
 
     def get_weather_from_aemet(self, municipality_code):
-        url = f'https://opendata.aemet.es/opendata/api/prediccion/especifica/municipio/horaria/{municipality_code}'
+        url = f'https://opendata.aemet.es/opendata/api/prediccion/especifica/municipio/diaria/{municipality_code}'
         headers = {
             'accept': 'application/json',
             'api_key': self.AEMET_API_KEY
@@ -60,29 +60,39 @@ class Weather():
         tiempo_tarde = "No disponible"
         tiempo_noche = "No disponible"
         
-        # Obtener los últimos cuatro estados del cielo
-        estado_cielo = dia['estadoCielo'][-4:] if len(dia['estadoCielo']) >= 4 else dia['estadoCielo']
+        # Verificar si 'estadoCielo' existe y tiene al menos 4 elementos
+        if 'estadoCielo' in dia and len(dia['estadoCielo']) >= 4:
+            # Obtener los últimos cuatro estados del cielo
+            estado_cielo = dia['estadoCielo'][-4:]
+        else:
+            # Si no hay suficientes datos, tomar toda la lista
+            estado_cielo = dia['estadoCielo']
 
-        # Asignar descripciones a las variables según los intervalos
-        for i, estado in enumerate(estado_cielo):
-            if i == 0:
-                tiempo_madrugada = estado['descripcion']  # 00-06
-            elif i == 1:
-                tiempo_manana = estado['descripcion']      # 06-12
-            elif i == 2:
-                tiempo_tarde = estado['descripcion']       # 12-18
-            elif i == 3:
-                tiempo_noche = estado['descripcion']       # 18-24
+        # Asignar valores a cada variable según el rango de periodo
+        for estado in estado_cielo:
+            periodo = estado['periodo']
+            descripcion = estado['descripcion']
+
+            # Comprobar el rango de periodo y asignar la descripción correspondiente
+            if "00-06" in periodo:
+                tiempo_madrugada = descripcion
+            elif "06-12" in periodo:
+                tiempo_manana = descripcion
+            elif "12-18" in periodo:
+                tiempo_tarde = descripcion
+            elif "18-24" in periodo:
+                tiempo_noche = descripcion
 
         # Comprobamos los períodos con más del 50% de probabilidad de lluvia
-        prob_lluvia = dia['probPrecipitacion'][-4:] if len(dia['probPrecipitacion']) >= 4 else dia['probPrecipitacion']
+        prob_lluvia = dia['probPrecipitacion'][-4:]
         intervalos_lluvia = []
 
         for prob in prob_lluvia:
             if int(prob['value']) > 50:
                 intervalos_lluvia.append(prob['periodo'])
 
-        # Unir intervalos de tiempo consecutivos
+        print(intervalos_lluvia)
+                
         intervalos_consolidados = self.consolidar_intervalos(intervalos_lluvia)
 
         return {
@@ -94,33 +104,26 @@ class Weather():
         }
 
     def consolidar_intervalos(self, intervalos):
-        if not intervalos:  # Si la lista está vacía, retornamos vacío
-            return []
-
-        # Eliminar duplicados y ordenar los intervalos
-        intervalos_unicos = sorted(set(intervalos))
-
+        # Consolidar intervalos consecutivos
         intervalos_consolidados = []
+        intervalo_actual = None
 
-        # Comenzamos con el primer intervalo
-        inicio, fin = intervalos_unicos[0].split('-')  # Extraemos el primer intervalo
-        inicio = int(inicio)
-        fin = int(fin)
+        for intervalo in intervalos:
+            inicio, fin = intervalo.split('-')
 
-        for i in range(1, len(intervalos_unicos)):
-            nuevo_inicio, nuevo_fin = intervalos_unicos[i].split('-')
-            nuevo_inicio = int(nuevo_inicio)
-            nuevo_fin = int(nuevo_fin)
-
-            # Comprobamos si hay superposición o si son consecutivos
-            if fin == nuevo_inicio:
-                fin = nuevo_fin  # Extender el intervalo actual
+            if not intervalo_actual:
+                # Inicializa el primer intervalo
+                intervalo_actual = {"inicio": inicio, "fin": fin}
+            elif intervalo_actual["fin"] == inicio:
+                # Si el intervalo es consecutivo, actualiza el fin del intervalo actual
+                intervalo_actual["fin"] = fin
             else:
-                # Añadimos el intervalo consolidado y comenzamos uno nuevo
-                intervalos_consolidados.append(f"{str(inicio).zfill(2)}-{str(fin).zfill(2)}")
-                inicio, fin = nuevo_inicio, nuevo_fin
+                # Si no es consecutivo, guarda el intervalo actual y empieza uno nuevo
+                intervalos_consolidados.append(f"{intervalo_actual['inicio']}-{intervalo_actual['fin']}")
+                intervalo_actual = {"inicio": inicio, "fin": fin}
 
-        # Añadir el último intervalo
-        intervalos_consolidados.append(f"{str(inicio).zfill(2)}-{str(fin).zfill(2)}")
-        
+        # Añadir el último intervalo consolidado
+        if intervalo_actual:
+            intervalos_consolidados.append(f"{intervalo_actual['inicio']}-{intervalo_actual['fin']}")
+
         return intervalos_consolidados
