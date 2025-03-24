@@ -4,3 +4,8 @@ cert.pem
 key.pem
 chatbot.py
 "chatbot copy.py"
+.env
+.dockerignore
+.env.example
+/logs
+/__pycache__
